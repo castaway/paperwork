@@ -1,0 +1,11 @@
+* Web UI - "scan some docs"
+* ajax twirly  "waiting for docs to arrive"
+* display next "page 1 and page 2"
+** ui for - delete page 2 (if blank)
+** - add date, tags, possibly description to "document"
+** - add page(s) to existing document (assume in order or allow reshuffle?)
+
+Scan - id, path, started_date, status
+Pages - scan_id, document_id, image_path
+Documents - id, doc_date, expire_date, category, ?
+
