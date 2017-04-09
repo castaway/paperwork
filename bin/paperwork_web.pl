@@ -55,7 +55,7 @@ sub dispatch_request {
         return [ 200, ['Content-type', 'application/json' ], [ encode_json({ $scan->get_columns } ) ] ];
     },
     ## Post here to query scan status, returns if running and list of scanned pages
-    sub (POST + /scan/ + %id) {
+    sub (POST + /scan/ + %id=) {
         my ($self, $scan_id) = @_;
 
         my $result = $self->model->get_status_and_pages($scan_id);

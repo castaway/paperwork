@@ -2,6 +2,7 @@ package Paperwork::Model;
 
 use strict;
 use warnings;
+use IPC::Run 'start';
 
 use Moo;
 use DateTime;
@@ -40,6 +41,24 @@ sub start_scan {
         status => 'starting',
     });
 
+
+    # FIXME: This doesn't really provide a nice way of seeing errors,
+    # keeping the user apprised of progress, etc.
+    start ['scanimage',
+	   '--verbose',
+	   '--mode' => 'Color', 
+	   '--device-name' => 'fujitsu:fi-5110Cdj:102493',
+	   '--progress',
+	   '--format' => 'tiff',
+	   '--batch',
+	   '--ald', # automatic length detection
+	   '--source' => 'ADF Duplex',
+	   '--sleeptimer' => 5],
+	undef,  # stdin
+	'>', 'stdout.log', #stdout
+	'>', 'stderr.log'; #stderr
+    
+	
     ## actually start the scan using the path:
 
     $scan->update({ status => 'running' });
