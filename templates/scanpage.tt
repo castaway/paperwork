@@ -1,0 +1,46 @@
+[% WRAPPER wrapper.tt %]
+<h1>Scans</h1>
+<h2>New Scan</h2>
+<form id="start_scan" action="/scan">
+  <input type="submit" name="scan" value="Start Scan"/>
+</form>
+<div>
+  <div>Current Status</div>
+  <div id="current_status">
+    <span id="scan_id"></span><span id="scan_status"></span>
+  </div>
+</div>
+<h2>Scan list</h2>
+
+<script type="text/javascript">
+  jQuery(function() {
+    jQuery('#start_scan').submit(function(event) {
+      event.preventDefault();
+      jQuery.post({
+        url: '/scan',
+        data: jQuery(this).serialize(),
+        success: function(data, status, jqXHR) {
+          update_status(data);
+          window.setTimeout(check_status, 100);
+        }
+    });
+  });
+
+  function update_status(data) {
+    jQuery('#scan_id').text(data['id']);
+    jQuery('#scan_status').text(data['status']);  
+  }
+
+  function check_status(data) {
+    jQuery.post({
+      url: '/scan' + jQuery('#scan_id').val(),
+      data: {},
+      success: function(data, status, jqXHR) {
+        update_status(data);
+        window.setTimeout(check_status, 100);
+      }
+    });
+  }
+});
+</script>
+[% END %]

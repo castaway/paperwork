@@ -16,10 +16,12 @@ sub _build_schema {
     my ($self) = @_;
 
     # my $dsn = 'dbi:SQLite:' . $self->config->{Setup}{dbfile};
-    my @dsn = ( $self->config->{Setup}{dsn},
-                $self->config->{Setup}{pg_user},
-                $self->config->{Setup}{pg_pass} );
-    Paperwork::Schema->connect(@dsn);
+    my @dsn = ( $self->config->{db}{dsn},
+                $self->config->{db}{pg_user},
+                $self->config->{db}{pg_pass} );
+    my $schema= Paperwork::Schema->connect(@dsn);
+    $schema->deploy if(!-e "paperwork.db");
+    return $schema;
 }
 
 =head2 start_scan

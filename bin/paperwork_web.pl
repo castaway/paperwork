@@ -8,6 +8,7 @@ use warnings;
 use Web::Simple;
 use Template;
 use JSON;
+use Config::General;
 use Data::Dumper;
 use Path::Class;
 use lib 'lib';
@@ -48,7 +49,7 @@ sub dispatch_request {
         return [ 200, ['Content-type', 'text/html' ], [ $self->tt_process('scanpage.tt') ] ];
     },
     ## Post here to start new scan:
-    sub (POST + /scan/) {
+    sub (POST + /scan) {
         my ($self) = @_;
 
         my $scan = $self->model->start_scan();
