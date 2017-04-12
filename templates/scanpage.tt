@@ -33,11 +33,13 @@
 
   function check_status(data) {
     jQuery.post({
-      url: '/scan' + jQuery('#scan_id').val(),
-      data: {},
+      url: '/check_scan',
+      data: { id: jQuery('#scan_id').text() },
       success: function(data, status, jqXHR) {
         update_status(data);
-        window.setTimeout(check_status, 100);
+        if(data['status'] == 'running') {
+          window.setTimeout(check_status, 100);
+        }
       }
     });
   }

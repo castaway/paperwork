@@ -3,6 +3,8 @@ package Paperwork::Model;
 use strict;
 use warnings;
 use IPC::Run 'start';
+use Path::Class 'dir';
+use Time::HiRes 'time', 'stat';
 
 use Moo;
 use DateTime;
@@ -15,7 +17,7 @@ has 'schema' => (is => 'ro', lazy => 1, builder => '_build_schema');
 sub _build_schema {
     my ($self) = @_;
 
-    # my $dsn = 'dbi:SQLite:' . $self->config->{Setup}{dbfile};
+    # my $dsn = 'dbi:SQLite:' . $self->config->{db}{dbfile};
     my @dsn = ( $self->config->{db}{dsn},
                 $self->config->{db}{pg_user},
                 $self->config->{db}{pg_pass} );
@@ -43,29 +45,82 @@ sub start_scan {
         status => 'starting',
     });
 
-
+    # mutate the datetime into a string.. (?!) else json convert barfs
+    $scan->discard_changes;
+    
+    my $dir = dir($scan->path);
+    if(-e $scan->path) {
+        warn "$dir already exists!";
+        return { error => "$dir already exists!" };
+    }
+    $dir->mkpath;
+    
+    my @command = @{ $self->config->{scan}{command} };
+    print STDERR Data::Dumper::Dumper(\@command);
     # FIXME: This doesn't really provide a nice way of seeing errors,
     # keeping the user apprised of progress, etc.
-    start ['scanimage',
-	   '--verbose',
-	   '--mode' => 'Color', 
-	   '--device-name' => 'fujitsu:fi-5110Cdj:102493',
-	   '--progress',
-	   '--format' => 'tiff',
-	   '--batch',
-	   '--ald', # automatic length detection
-	   '--source' => 'ADF Duplex',
-	   '--sleeptimer' => 5],
-	undef,  # stdin
-	'>', 'stdout.log', #stdout
-	'>', 'stderr.log'; #stderr
+    # start ['scanimage',
+	#    '--verbose',
+	#    '--mode' => 'Color', 
+	#    '--device-name' => 'fujitsu:fi-5110Cdj:102493',
+	#    '--progress',
+	#    '--format' => 'tiff',
+	#    '--batch',
+	#    '--ald', # automatic length detection
+	#    '--source' => 'ADF Duplex',
+	#    '--sleeptimer' => 5],
+    start([ @command ],
+	  '<',  '/dev/null',               #stdin
+          '>',  "".$dir->file('stdout.log'),  #stdout
+          '2>', "".$dir->file('stderr.log'),  #stderr
+          init => sub {
+              chdir "$dir" or die $!;
+          }
+        );
     
-	
-    ## actually start the scan using the path:
-
     $scan->update({ status => 'running' });
 
     return $scan;
+}
+
+=head2 is_finished
+
+Check if the scan has finished -- a well-finished scan will end with a
+line telling us the feeder ran out of things to scan.  To stop
+badly-ended scans from showing up as unfinished forever, the scan is
+also considered finished if no files (including the log!) have changed
+in the last minute-and-a-bit.
+
+=cut
+
+sub is_finished {
+    my ($self, $scan) = @_;
+
+    my $dir = dir($scan->path);
+
+    if (-e $dir->file('stderr.log')) {
+	open my $infh, '<', $dir->file('stderr.log') or die;
+	my $lastline = (<$infh>)[-1];
+	return 1 if $lastline eq "scanimage: sane_start: Document feeder out of documents\n";
+    }
+    
+    my @files = $dir->children(no_hidden => 0);
+    foreach my $file (@files) {
+        my $stat = $file->stat;
+	if (!$stat) {
+	    # The file seemed to have vanished between our call to
+	    # ->children and ->stat.  This is probably a .part file
+	    # that has just been finished and renamed to be a real
+	    # little boy.  In any case, it means it's not all finished
+	    # quite yet.
+	    return 0;
+	}
+	my $mtime = time() - $stat->mtime;
+	print "File $file: $mtime sec old\n";
+        return 0 if $mtime <= 65;
+    }
+
+    return 1;
 }
 
 =head2 get_status_and_pages
@@ -78,7 +133,7 @@ return { status => 'xxx', pages => [] }
 sub get_status_and_pages {
     my ($self, $scan_id) = @_;
 
-    my $scan = $self->schema->resultet('Scan')->find({ id => $scan_id });
+    my $scan = $self->schema->resultset('Scan')->find({ id => $scan_id });
 
     ## !?
     return if !$scan;
@@ -87,7 +142,24 @@ sub get_status_and_pages {
     ## add/update $scan->pages we found that are finished
     ## set status to 'done' if... process gone away?
 
-    return { status => $scan->status, pages => $scan->pages };
+
+    if($self->is_finished($scan)) {
+        $scan->update({ status => 'done' });
+    }
+    
+    my $dir = dir($scan->path);
+    for my $file ($dir->children(no_hidden => 1)) {
+	next unless $file->basename =~ m/^out\d+\.tif$/;
+	$scan->pages->update_or_create({
+	    status => 'new',
+	    image_path => $file->stringify,
+				       });
+    }
+
+    return { id => $scan->id, 
+	     status => $scan->status, 
+	     pages => [ map { +{ $_-> get_columns } } $scan->pages ]
+    };
 }
 
 sub create_document {

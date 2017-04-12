@@ -53,10 +53,11 @@ sub dispatch_request {
         my ($self) = @_;
 
         my $scan = $self->model->start_scan();
+        print STDERR Data::Dumper::Dumper({ $scan->get_columns });
         return [ 200, ['Content-type', 'application/json' ], [ encode_json({ $scan->get_columns } ) ] ];
     },
     ## Post here to query scan status, returns if running and list of scanned pages
-    sub (POST + /scan/ + %id=) {
+    sub (POST + /check_scan + %id=) {
         my ($self, $scan_id) = @_;
 
         my $result = $self->model->get_status_and_pages($scan_id);
